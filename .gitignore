@@ -1,0 +1,16 @@
+# Environment and credentials
+.env
+.env.*
+!.env.example
+
+# Temporary and editor files
+~$*
+.DS_Store
+Thumbs.db
+
+# Dependencies and generated output
+node_modules/
+dist/
+build/
+coverage/
+.cache/
