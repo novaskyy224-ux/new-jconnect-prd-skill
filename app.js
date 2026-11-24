@@ -13,7 +13,7 @@ const banks = [
 const methods = [
   {
     id: "metode-a",
-    name: "Metode Standar",
+    name: "Pilihan Metode Simulasi A",
     fee: "TBD",
     speed: "TBD",
     terms: "Ketentuan simulasi belum ditetapkan",
@@ -21,7 +21,7 @@ const methods = [
   },
   {
     id: "metode-b",
-    name: "Metode Prioritas",
+    name: "Pilihan Metode Simulasi B",
     fee: "TBD",
     speed: "TBD",
     terms: "Ketentuan simulasi belum ditetapkan",
@@ -31,39 +31,87 @@ const methods = [
 
 const state = {
   route: "home",
-  recipientName: "",
   accountNumber: "",
   bankId: "",
   amount: "",
   methodId: "",
-  editing: false,
-  history: loadHistory(),
+  history: [],
+  historyError: "",
   currentTransactionId: null,
+  duplicateTransactionId: null,
   networkWarning: !navigator.onLine,
 };
 
 const app = document.getElementById("app");
+state.history = loadHistory();
 
 function loadHistory() {
+  state.historyError = "";
+  let serialized;
   try {
-    return JSON.parse(localStorage.getItem("jconnect-history") || "[]");
-  } catch {
+    serialized = localStorage.getItem("jconnect-history");
+  } catch (error) {
+    state.historyError = "Browser tidak mengizinkan riwayat simulasi dibaca. Periksa pengaturan penyimpanan browser.";
     return [];
   }
+
+  if (!serialized) return [];
+
+  let parsed;
+  try {
+    parsed = JSON.parse(serialized);
+  } catch (error) {
+    state.historyError = "Riwayat simulasi tidak dapat dibaca karena format datanya rusak.";
+    return [];
+  }
+
+  const validStatuses = Object.values(STATUS);
+  const validHistory = Array.isArray(parsed) && parsed.every((item) =>
+    item &&
+    typeof item.id === "string" &&
+    typeof item.recipientName === "string" &&
+    typeof item.accountNumber === "string" &&
+    typeof item.bankId === "string" &&
+    typeof item.bankName === "string" &&
+    typeof item.amount === "string" &&
+    /^\d+$/.test(item.amount) &&
+    typeof item.methodId === "string" &&
+    typeof item.methodName === "string" &&
+    validStatuses.includes(item.status)
+  );
+
+  if (!validHistory) {
+    state.historyError = "Riwayat simulasi memiliki data yang tidak sesuai. Data lama tidak ditampilkan.";
+    return [];
+  }
+
+  return parsed.map((item) => ({
+    ...item,
+    reference: typeof item.reference === "string" && !item.reference.startsWith("SIM-")
+      ? item.reference
+      : null,
+  }));
 }
 
 function saveHistory() {
-  localStorage.setItem("jconnect-history", JSON.stringify(state.history));
+  try {
+    localStorage.setItem("jconnect-history", JSON.stringify(state.history));
+    state.historyError = "";
+    return true;
+  } catch (error) {
+    state.historyError = "Riwayat tidak dapat disimpan di browser ini. Transaksi hanya tersedia selama halaman terbuka.";
+    return false;
+  }
 }
 
 function formatAmount(value) {
-  const number = Number(String(value).replace(/[^\d]/g, ""));
-  if (!number) return "Rp 0";
+  const digits = String(value).replace(/[^\d]/g, "");
+  if (!digits) return "Rp 0";
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
-  }).format(number);
+  }).format(BigInt(digits));
 }
 
 function escapeHtml(value) {
@@ -86,7 +134,7 @@ function selectedMethod() {
 function header(title, backAction) {
   return `
     <header class="header">
-      ${backAction ? `<button class="icon-button" type="button" data-action="${backAction}" aria-label="Kembali">←</button>` : "<div style=\"width:44px\"></div>"}
+      ${backAction ? `<button class="icon-button" type="button" data-action="${backAction}" aria-label="Kembali">←</button>` : '<span class="header-spacer" aria-hidden="true"></span>'}
       <h1>${escapeHtml(title)}</h1>
     </header>
   `;
@@ -102,6 +150,44 @@ function networkPanel() {
   `;
 }
 
+function historyErrorPanel() {
+  if (!state.historyError) return "";
+  return `<div class="error-panel" role="alert">${escapeHtml(state.historyError)}</div>`;
+}
+
+function findLocalRecipient(accountNumber, bankId) {
+  const recipients = {
+    "bank-sim-1:100001": "Penerima Simulasi Satu",
+    "bank-sim-2:100002": "Penerima Simulasi Dua",
+  };
+  return recipients[`${bankId}:${accountNumber}`] || "";
+}
+
+function currentRecipient() {
+  return findLocalRecipient(state.accountNumber, state.bankId);
+}
+
+function renderRecipientVerification() {
+  const recipientName = currentRecipient();
+  if (recipientName) {
+    return `
+      <div class="card identity-card" role="status" aria-live="polite">
+        <div class="avatar" aria-hidden="true">${escapeHtml(recipientName.charAt(0).toUpperCase())}</div>
+        <div><strong>${escapeHtml(recipientName)}</strong><br><span>${escapeHtml(selectedBank().name)}</span><br><span class="method-meta">Identitas simulasi terverifikasi</span></div>
+      </div>
+    `;
+  }
+
+  const hasInput = Boolean(state.accountNumber || state.bankId);
+  return `
+    <div class="${hasInput ? "error-panel" : "simulation-note"}" role="status" aria-live="polite">
+      ${hasInput
+        ? "Data rekening dan bank tidak cocok dengan penerima simulasi. Periksa kembali tujuan."
+        : "Masukkan rekening simulasi dan pilih bank untuk memverifikasi penerima."}
+    </div>
+  `;
+}
+
 function renderHome() {
   app.innerHTML = `
     <div class="page">
@@ -111,9 +197,10 @@ function renderHome() {
       </section>
       <div class="content">
         ${networkPanel()}
+        ${historyErrorPanel()}
         <p class="simulation-note">Aplikasi ini menggunakan data simulasi lokal. Tidak terhubung ke rekening atau sistem perbankan nyata.</p>
         <nav class="menu-grid" aria-label="Menu utama">
-          <button class="menu-card" type="button" data-action="transfer">
+          <button class="menu-card" type="button" data-action="new-transfer">
             <span aria-hidden="true">⇄</span>
             <div><strong>Transfer Antarbank</strong><span>Transfer ke bank tujuan simulasi</span></div>
           </button>
@@ -137,21 +224,15 @@ function renderTransfer() {
       ${header("Transfer Antarbank", "home")}
       <div class="content">
         ${networkPanel()}
-        <p class="simulation-note">Isi data simulasi. Nama penerima hanya ditampilkan berdasarkan pemetaan lokal yang tersedia.</p>
-        <form id="transfer-form" novalidate>
+        ${historyErrorPanel()}
+        <p class="simulation-note">Data simulasi tersedia: rekening 100001 untuk Bank Simulasi A dan 100002 untuk Bank Simulasi B. Nama penerima hanya ditampilkan dari pemetaan lokal.</p>
+        <form id="transfer-form" class="transfer-form" novalidate>
           <div class="form-group">
             <label for="accountNumber">Nomor rekening tujuan simulasi</label>
             <input class="input" id="accountNumber" name="accountNumber" inputmode="numeric" autocomplete="off"
-              value="${escapeHtml(state.accountNumber)}" aria-describedby="account-error"
+              value="${escapeHtml(state.accountNumber)}" aria-describedby="account-error recipient-error"
               placeholder="Contoh: 100001" />
             <div id="account-error" class="field-error" role="alert"></div>
-          </div>
-          <div class="form-group">
-            <label for="recipientName">Nama penerima</label>
-            <input class="input" id="recipientName" name="recipientName" autocomplete="off"
-              value="${escapeHtml(state.recipientName)}" aria-describedby="recipient-error"
-              placeholder="Diisi otomatis jika tersedia di data simulasi" />
-            <div id="recipient-error" class="field-error" role="alert"></div>
           </div>
           <div class="form-group">
             <label for="bankId">Bank tujuan</label>
@@ -161,21 +242,16 @@ function renderTransfer() {
             </select>
             <div id="bank-error" class="field-error" role="alert"></div>
           </div>
-          <div class="form-group">
+          <div id="recipient-verification">${renderRecipientVerification()}</div>
+          <div id="recipient-error" class="field-error" role="alert"></div>
+          <div class="form-group form-group-wide">
             <label for="amount">Nominal</label>
             <input class="input" id="amount" name="amount" inputmode="numeric" autocomplete="off"
               value="${escapeHtml(state.amount)}" aria-describedby="amount-error" placeholder="Rp" />
             <div id="amount-error" class="field-error" role="alert"></div>
           </div>
-          ${selectedBank() ? `
-            <div class="card identity-card" aria-label="Identitas penerima">
-              <div class="avatar" aria-hidden="true">${escapeHtml((state.recipientName || "?").charAt(0).toUpperCase())}</div>
-              <div><strong>${escapeHtml(state.recipientName || "Nama belum tersedia")}</strong><br><span>${escapeHtml(selectedBank().name)}</span></div>
-            </div>
-          ` : ""}
           <div class="actions">
-            <button class="button button-secondary" type="button" data-action="methods">Lihat dan Pilih Metode</button>
-            <button class="button button-primary" type="submit">Lanjut ke Konfirmasi</button>
+            <button class="button button-primary" type="submit">Lihat dan Pilih Metode</button>
           </div>
         </form>
       </div>
@@ -186,10 +262,11 @@ function renderTransfer() {
 function renderMethods() {
   app.innerHTML = `
     <div class="page">
-      ${header("Metode Transfer", "transfer")}
+      ${header("Metode Transfer", "back-transfer")}
       <div class="content">
         ${networkPanel()}
-        <p class="simulation-note">Nilai biaya, kecepatan, dan batas nominal belum ditetapkan dalam PRD. Semua ditampilkan sebagai TBD.</p>
+        ${historyErrorPanel()}
+        <p class="simulation-note">Nama di bawah hanya label pembanding simulasi, bukan nama metode bank. Biaya, kecepatan, ketentuan, dan batas nominal masih TBD.</p>
         <div class="method-list" role="radiogroup" aria-label="Metode transfer">
           ${methods.map((method) => `
             <label class="method-option ${state.methodId === method.id ? "selected" : ""}">
@@ -204,6 +281,7 @@ function renderMethods() {
             </label>
           `).join("")}
         </div>
+        <div id="method-error" class="field-error" role="alert"></div>
         <div class="actions">
           <button class="button button-primary" type="button" data-action="confirm-method">Gunakan Metode Pilihan</button>
         </div>
@@ -215,6 +293,12 @@ function renderMethods() {
 function renderConfirmation() {
   const bank = selectedBank();
   const method = selectedMethod();
+  const matchingDuplicate = checkDuplicate();
+  const duplicateProcessing = state.history.some((item) =>
+    item.id === state.duplicateTransactionId &&
+    item.id === matchingDuplicate?.id &&
+    item.status === STATUS.PROCESSING
+  );
   if (!bank || !method) {
     state.route = "transfer";
     renderTransfer();
@@ -226,21 +310,35 @@ function renderConfirmation() {
       ${header("Konfirmasi Transfer", "methods")}
       <div class="content">
         ${networkPanel()}
+        ${historyErrorPanel()}
+        ${duplicateProcessing ? `
+          <div class="warning-panel" role="alert">
+            <strong>Transfer serupa masih diproses.</strong>
+            <p>Periksa status transaksi sebelum mengirim ulang. Status ini belum final.</p>
+            <div class="actions">
+              <button class="button button-secondary" type="button" data-action="review-duplicate">Tinjau Status</button>
+              <button class="button button-secondary" type="button" data-action="cancel-duplicate">Batal dan Kembali ke Formulir</button>
+              <button class="button button-primary" type="button" data-action="proceed-duplicate">Lanjutkan Simulasi</button>
+            </div>
+          </div>
+        ` : ""}
         <div class="card">
           <h2>Ringkasan Transfer</h2>
           <dl>
-            <div class="summary-row"><dt>Penerima</dt><dd>${escapeHtml(state.recipientName)}</dd></div>
+            <div class="summary-row"><dt>Penerima</dt><dd>${escapeHtml(currentRecipient())}</dd></div>
             <div class="summary-row"><dt>Bank tujuan</dt><dd>${escapeHtml(bank.name)}</dd></div>
             <div class="summary-row"><dt>Nominal</dt><dd>${formatAmount(state.amount)}</dd></div>
-            <div class="summary-row"><dt>Biaya</dt><dd>TBD</dd></div>
+            <div class="summary-row"><dt>Biaya administrasi</dt><dd>TBD</dd></div>
             <div class="summary-row"><dt>Metode</dt><dd>${escapeHtml(method.name)}</dd></div>
-            <div class="summary-row"><dt>Total debit</dt><dd>TBD + ${formatAmount(state.amount)}</dd></div>
+            <div class="summary-row"><dt>Total dana didebit</dt><dd>TBD (biaya belum ditetapkan)</dd></div>
           </dl>
         </div>
-        <button class="button button-secondary" type="button" data-action="correct" style="width:100%">Ubah Tujuan</button>
-        <div class="actions">
-          <button class="button button-primary" type="button" data-action="approve">Setujui Transfer Simulasi</button>
-        </div>
+        <button class="button button-secondary button-full-width" type="button" data-action="correct">Ubah Tujuan</button>
+        ${duplicateProcessing ? "" : `
+          <div class="actions">
+            <button class="button button-primary" type="button" data-action="approve">Setujui Transfer Simulasi</button>
+          </div>
+        `}
       </div>
     </div>
   `;
@@ -271,17 +369,20 @@ function renderStatus() {
       ${header("Status Transaksi", "home")}
       <div class="content">
         ${networkPanel()}
+        ${historyErrorPanel()}
+        <p class="simulation-note">Status ini hanya hasil simulasi lokal. Tidak ada transaksi yang dikirim ke bank.</p>
         <div class="card status-card" role="status">
           <div class="status-icon ${statusClass}" aria-hidden="true">${statusIcon}</div>
           <h2>${statusTitle}</h2>
           <p>${statusDescription}</p>
           ${transaction.reference ? `<p><strong>Nomor referensi simulasi:</strong> ${escapeHtml(transaction.reference)}</p>` : ""}
+          ${!transaction.reference ? `<p class="method-meta">Nomor referensi belum tersedia dalam simulasi ini.</p>` : ""}
         </div>
 
         ${transaction.status === STATUS.PROCESSING ? `
           <div class="loading" role="status">
             <span class="spinner" aria-hidden="true"></span>
-            <span>Memuat atau menunggu pembaruan status</span>
+            <span>Menunggu pembaruan status. Periksa riwayat jika belum jelas.</span>
           </div>
           <div class="card">
             <h3>Perbarui Status Simulasi</h3>
@@ -296,7 +397,8 @@ function renderStatus() {
         <div class="actions">
           <button class="button button-primary" type="button" data-action="history">Buka Riwayat</button>
           <button class="button button-secondary" type="button" data-action="help">Customer Service</button>
-          ${transaction.status !== STATUS.PROCESSING ? `<button class="button button-secondary" type="button" data-action="transfer">Transfer Baru</button>` : ""}
+          ${state.duplicateTransactionId && transaction.id === state.duplicateTransactionId && transaction.status === STATUS.PROCESSING ? `<button class="button button-secondary" type="button" data-action="confirm">Kembali ke Konfirmasi</button>` : ""}
+          ${transaction.status !== STATUS.PROCESSING ? `<button class="button button-secondary" type="button" data-action="new-transfer">Transfer Baru</button>` : ""}
         </div>
       </div>
     </div>
@@ -309,11 +411,12 @@ function renderHistory() {
       ${header("Riwayat Transaksi", "home")}
       <div class="content">
         ${networkPanel()}
+        ${historyErrorPanel()}
         ${state.history.length === 0 ? `
           <div class="empty-state">
-            <strong>Belum ada transaksi</strong>
-            <span>Riwayat akan muncul setelah transfer simulasi dimulai.</span>
-            <div class="actions"><button class="button button-primary" type="button" data-action="transfer">Mulai Transfer</button></div>
+            <strong>${state.historyError ? "Riwayat tidak dapat ditampilkan" : "Belum ada transaksi"}</strong>
+            <span>${state.historyError ? "Periksa pesan kendala penyimpanan di atas." : "Riwayat akan muncul setelah transfer simulasi dimulai."}</span>
+            <div class="actions"><button class="button button-primary" type="button" data-action="new-transfer">Mulai Transfer</button></div>
           </div>
         ` : state.history.map((transaction) => `
           <article class="history-item">
@@ -324,7 +427,7 @@ function renderHistory() {
               </span>
             </div>
             <p>${formatAmount(transaction.amount)} · ${escapeHtml(transaction.methodName)}</p>
-            ${transaction.reference ? `<p><strong>Nomor referensi:</strong> ${escapeHtml(transaction.reference)}</p>` : `<p><strong>Nomor referensi:</strong> Tidak tersedia</p>`}
+            ${transaction.reference ? `<p><strong>Nomor referensi simulasi:</strong> ${escapeHtml(transaction.reference)}</p>` : `<p>Nomor referensi belum tersedia dalam simulasi ini.</p>`}
             <button class="text-button" type="button" data-history-id="${transaction.id}">Lihat Detail</button>
           </article>
         `).join("")}
@@ -339,6 +442,7 @@ function renderHelp() {
       ${header("Customer Service", "home")}
       <div class="content">
         ${networkPanel()}
+        ${historyErrorPanel()}
         <div class="card">
           <h2>Bantuan Transfer</h2>
           <p>Untuk transaksi yang belum jelas, periksa riwayat terlebih dahulu. Jangan mengirim transfer serupa jika status masih diproses.</p>
@@ -354,36 +458,64 @@ function renderHelp() {
 
 function validateTransferForm() {
   let valid = true;
-  const fields = [
-    ["accountNumber", "account-error", "Masukkan nomor rekening tujuan simulasi."],
-    ["recipientName", "recipient-error", "Masukkan nama penerima atau gunakan pemetaan data simulasi."],
-    ["bankId", "bank-error", "Pilih bank tujuan simulasi."],
-    ["amount", "amount-error", "Masukkan nominal transfer."],
-  ];
-
-  fields.forEach(([fieldId, errorId, message]) => {
+  const setError = (fieldId, errorId, message, markInvalid = true) => {
     const field = document.getElementById(fieldId);
     const error = document.getElementById(errorId);
-    if (!field || String(field.value).trim()) {
-      if (field) field.setAttribute("aria-invalid", "false");
-      if (error) error.textContent = "";
-      return;
-    }
-    valid = false;
-    field.setAttribute("aria-invalid", "true");
-    error.textContent = message;
-  });
-
-  if (valid) state.methodId = state.methodId || methods[0].id;
-  return valid;
-}
-
-function findLocalRecipient(accountNumber) {
-  const recipients = {
-    "100001": "Penerima Simulasi Satu",
-    "100002": "Penerima Simulasi Dua",
+    const hasError = Boolean(message);
+    if (field && markInvalid) field.setAttribute("aria-invalid", String(hasError));
+    if (error) error.textContent = message;
+    if (hasError) valid = false;
   };
-  return recipients[accountNumber] || "";
+
+  const accountNumber = state.accountNumber.trim();
+  const bankId = state.bankId;
+  const amount = state.amount.trim();
+  const recipientName = findLocalRecipient(accountNumber, bankId);
+  const amountIsValid = /^\d+$/.test(amount) && BigInt(amount || "0") > 0n;
+
+  setError(
+    "accountNumber",
+    "account-error",
+    !accountNumber
+      ? "Masukkan nomor rekening tujuan simulasi."
+      : !/^\d+$/.test(accountNumber)
+        ? "Nomor rekening simulasi hanya boleh berisi angka."
+        : ""
+  );
+  setError("bankId", "bank-error", bankId ? "" : "Pilih bank tujuan simulasi.");
+  setError(
+    "amount",
+    "amount-error",
+    !amount
+      ? "Masukkan nominal transfer."
+      : !/^\d+$/.test(amount)
+        ? "Nominal hanya boleh berisi angka."
+        : !amountIsValid
+          ? "Nominal harus lebih besar dari nol."
+          : ""
+  );
+  setError(
+    "accountNumber",
+    "recipient-error",
+    accountNumber && bankId && !recipientName
+      ? "Data rekening tidak ditemukan untuk bank yang dipilih. Periksa kembali tujuan."
+      : "",
+    false
+  );
+
+  if (accountNumber && bankId && !recipientName) {
+    const accountField = document.getElementById("accountNumber");
+    if (accountField) accountField.setAttribute("aria-invalid", "true");
+    valid = false;
+  }
+
+  if (!valid) {
+    document.querySelector('#transfer-form [aria-invalid="true"]')?.focus();
+    return false;
+  }
+
+  state.methodId = "";
+  return valid;
 }
 
 function checkDuplicate() {
@@ -391,26 +523,36 @@ function checkDuplicate() {
     transaction.status === STATUS.PROCESSING &&
     transaction.accountNumber === state.accountNumber &&
     transaction.bankId === state.bankId &&
-    transaction.amount === state.amount &&
+    BigInt(transaction.amount) === BigInt(state.amount) &&
     transaction.methodId === state.methodId
   );
 }
 
 function approveTransfer() {
   const duplicate = checkDuplicate();
-  if (duplicate) {
-    const cancelTransfer = window.confirm(
-      "Ada transfer serupa yang masih diproses. Tekan OK untuk membatalkan transfer ini, atau Cancel untuk melanjutkan."
-    );
-    if (cancelTransfer) return;
+  if (duplicate && state.duplicateTransactionId !== duplicate.id) {
+    state.duplicateTransactionId = duplicate.id;
+    renderConfirmation();
+    return;
   }
 
+  state.duplicateTransactionId = null;
+  createTransfer();
+}
+
+function createTransfer() {
   const bank = selectedBank();
   const method = selectedMethod();
-  const id = `trx-${Date.now()}`;
+  if (!bank || !method || !currentRecipient()) {
+    state.route = "transfer";
+    renderTransfer();
+    return;
+  }
+
+  const id = `trx-${Date.now()}-${state.history.length}`;
   const transaction = {
     id,
-    recipientName: state.recipientName,
+    recipientName: currentRecipient(),
     accountNumber: state.accountNumber,
     bankId: bank.id,
     bankName: bank.name,
@@ -423,18 +565,44 @@ function approveTransfer() {
 
   state.history.unshift(transaction);
   state.currentTransactionId = id;
+  state.duplicateTransactionId = null;
   saveHistory();
   state.route = "status";
   renderStatus();
 }
 
 function updateStatus(status) {
+  if (!Object.values(STATUS).includes(status)) return;
   const transaction = state.history.find((item) => item.id === state.currentTransactionId);
   if (!transaction) return;
   transaction.status = status;
-  transaction.reference = status === STATUS.SUCCESS ? `SIM-${transaction.id.slice(-8).toUpperCase()}` : null;
+  if (state.duplicateTransactionId === transaction.id) state.duplicateTransactionId = null;
   saveHistory();
   renderStatus();
+}
+
+function startNewTransfer() {
+  state.accountNumber = "";
+  state.bankId = "";
+  state.amount = "";
+  state.methodId = "";
+  state.currentTransactionId = null;
+  state.duplicateTransactionId = null;
+  go("transfer");
+}
+
+function refreshRecipientVerification() {
+  const verification = document.getElementById("recipient-verification");
+  if (verification) verification.innerHTML = renderRecipientVerification();
+
+  const accountError = document.getElementById("account-error");
+  const recipientError = document.getElementById("recipient-error");
+  const bankError = document.getElementById("bank-error");
+  if (accountError) accountError.textContent = "";
+  if (recipientError) recipientError.textContent = "";
+  if (bankError && state.bankId) bankError.textContent = "";
+  document.getElementById("accountNumber")?.setAttribute("aria-invalid", "false");
+  document.getElementById("bankId")?.setAttribute("aria-invalid", "false");
 }
 
 function go(route) {
@@ -451,24 +619,32 @@ function go(route) {
 document.addEventListener("input", (event) => {
   if (event.target.id === "accountNumber") {
     state.accountNumber = event.target.value;
-    const recipient = findLocalRecipient(state.accountNumber);
-    if (recipient && !state.editing) {
-      state.recipientName = recipient;
-      const nameInput = document.getElementById("recipientName");
-      if (nameInput) nameInput.value = recipient;
-    }
+    state.methodId = "";
+    state.duplicateTransactionId = null;
+    refreshRecipientVerification();
   }
-  if (event.target.id === "recipientName") {
-    state.editing = true;
-    state.recipientName = event.target.value;
+  if (event.target.id === "amount") {
+    state.amount = event.target.value;
+    state.methodId = "";
+    state.duplicateTransactionId = null;
+    const error = document.getElementById("amount-error");
+    if (error) error.textContent = "";
+    event.target.setAttribute("aria-invalid", "false");
   }
-  if (event.target.id === "amount") state.amount = event.target.value;
 });
 
 document.addEventListener("change", (event) => {
-  if (event.target.id === "bankId") state.bankId = event.target.value;
+  if (event.target.id === "bankId") {
+    state.bankId = event.target.value;
+    state.methodId = "";
+    state.duplicateTransactionId = null;
+    refreshRecipientVerification();
+  }
   if (event.target.name === "method") {
     state.methodId = event.target.value;
+    state.duplicateTransactionId = null;
+    const error = document.getElementById("method-error");
+    if (error) error.textContent = "";
     document.querySelectorAll(".method-option").forEach((option) => option.classList.remove("selected"));
     event.target.closest(".method-option")?.classList.add("selected");
   }
@@ -478,8 +654,7 @@ document.addEventListener("submit", (event) => {
   if (event.target.id !== "transfer-form") return;
   event.preventDefault();
   if (!validateTransferForm()) return;
-  state.editing = false;
-  go("confirm");
+  go("methods");
 });
 
 document.addEventListener("click", (event) => {
@@ -487,19 +662,33 @@ document.addEventListener("click", (event) => {
   if (actionButton) {
     const action = actionButton.dataset.action;
     if (action === "transfer") {
-      state.editing = false;
+      go("transfer");
+    } else if (action === "back-transfer") {
       go("transfer");
     } else if (action === "methods") {
-      if (!validateTransferForm()) return;
       go("methods");
     } else if (action === "confirm-method") {
-      if (!state.methodId) state.methodId = methods[0].id;
+      if (!state.methodId) {
+        const error = document.getElementById("method-error");
+        if (error) error.textContent = "Pilih salah satu metode simulasi untuk melanjutkan.";
+        document.querySelector('input[name="method"]')?.focus();
+        return;
+      }
       go("confirm");
     } else if (action === "correct") {
-      state.editing = true;
+      state.duplicateTransactionId = null;
       go("transfer");
     } else if (action === "approve") {
       approveTransfer();
+    } else if (action === "review-duplicate") {
+      state.currentTransactionId = state.duplicateTransactionId;
+      go("status");
+    } else if (action === "cancel-duplicate") {
+      state.duplicateTransactionId = null;
+      go("transfer");
+    } else if (action === "proceed-duplicate") {
+      state.duplicateTransactionId = null;
+      createTransfer();
     } else if (action === "set-success") {
       updateStatus(STATUS.SUCCESS);
     } else if (action === "set-failed") {
@@ -510,6 +699,10 @@ document.addEventListener("click", (event) => {
       go("help");
     } else if (action === "home") {
       go("home");
+    } else if (action === "new-transfer") {
+      startNewTransfer();
+    } else if (action === "confirm") {
+      go("confirm");
     }
   }
 
@@ -531,9 +724,14 @@ window.addEventListener("offline", () => {
 });
 
 window.addEventListener("storage", (event) => {
-  if (event.key !== "jconnect-history") return;
+  if (event.key !== "jconnect-history" && event.key !== null) return;
   state.history = loadHistory();
+  if (!state.history.some((item) => item.id === state.duplicateTransactionId && item.status === STATUS.PROCESSING)) {
+    state.duplicateTransactionId = null;
+  }
   if (state.route === "status") renderStatus();
+  if (state.route === "history") renderHistory();
+  if (state.route === "confirm") renderConfirmation();
 });
 
 renderHome();
