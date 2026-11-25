@@ -189,30 +189,112 @@ function renderRecipientVerification() {
 }
 
 function renderHome() {
+  const recentTransactions = state.history.slice(0, 3);
   app.innerHTML = `
-    <div class="page">
-      <section class="brand">
-        <p>Simulasi New JConnect Mobile</p>
-        <h1>Beranda</h1>
-      </section>
-      <div class="content">
-        ${networkPanel()}
-        ${historyErrorPanel()}
-        <p class="simulation-note">Aplikasi ini menggunakan data simulasi lokal. Tidak terhubung ke rekening atau sistem perbankan nyata.</p>
-        <nav class="menu-grid" aria-label="Menu utama">
-          <button class="menu-card" type="button" data-action="new-transfer">
-            <span aria-hidden="true">⇄</span>
-            <div><strong>Transfer Antarbank</strong><span>Transfer ke bank tujuan simulasi</span></div>
+    <div class="page dashboard-page">
+      <div class="dashboard-shell">
+        <aside class="dashboard-sidebar" aria-label="Navigasi simulasi">
+          <button class="dashboard-brand" type="button" data-action="home" aria-label="J-Connect, Beranda simulasi">
+            <span class="brand-mark" aria-hidden="true">J</span>
+            <span>J-Connect<small>Bank Jatim · Simulasi</small></span>
           </button>
-          <button class="menu-card" type="button" data-action="history">
-            <span aria-hidden="true">↗</span>
-            <div><strong>Riwayat Transaksi</strong><span>Lihat status dan referensi yang tersedia</span></div>
-          </button>
-          <button class="menu-card" type="button" data-action="help">
-            <span aria-hidden="true">?</span>
-            <div><strong>Customer Service</strong><span>Bantuan konteks simulasi</span></div>
-          </button>
-        </nav>
+          <span class="dashboard-nav-label">MENU SIMULASI</span>
+          <nav class="dashboard-nav">
+            <button class="dashboard-nav-link active" type="button" data-action="home" aria-current="page"><span aria-hidden="true">⌂</span>Beranda</button>
+            <button class="dashboard-nav-link" type="button" data-action="new-transfer"><span aria-hidden="true">⇄</span>Transfer Antarbank</button>
+            <button class="dashboard-nav-link" type="button" data-action="history"><span aria-hidden="true">◷</span>Riwayat Transaksi</button>
+            <button class="dashboard-nav-link" type="button" data-action="help"><span aria-hidden="true">?</span>Bantuan Transfer</button>
+          </nav>
+          <div class="dashboard-sidebar-bottom">
+            <div class="sidebar-simulation-icon" aria-hidden="true">✓</div>
+            <strong>Simulasi lokal</strong>
+            <p>Tidak terhubung ke rekening atau sistem perbankan nyata.</p>
+            <button class="text-button" type="button" data-action="help">Tentang simulasi <span aria-hidden="true">→</span></button>
+          </div>
+          <div class="dashboard-sidebar-footer">J-Connect · Bank Jatim</div>
+        </aside>
+        <div class="dashboard-main">
+          <header class="dashboard-topbar">
+            <div>
+              <span class="eyebrow">BERANDA SIMULASI</span>
+              <h1>Selamat datang di J-Connect</h1>
+              <p>Kelola alur transfer antarbank simulasi Anda.</p>
+            </div>
+            <span class="simulation-mode"><span aria-hidden="true"></span>Mode simulasi</span>
+          </header>
+          ${networkPanel()}
+          ${historyErrorPanel()}
+          <section class="dashboard-hero">
+            <div class="dashboard-hero-copy">
+              <span class="dashboard-hero-kicker">TRANSFER ANTARBANK</span>
+              <h2>Periksa tujuan sebelum transfer.</h2>
+              <p>Tinjau penerima, metode, dan status dalam satu alur simulasi yang jelas.</p>
+              <button class="button dashboard-hero-button" type="button" data-action="new-transfer">Mulai transfer simulasi <span aria-hidden="true">→</span></button>
+            </div>
+            <div class="dashboard-hero-steps" aria-label="Tahapan transfer simulasi">
+              <div><span>01</span><strong>Periksa penerima</strong><small>Nama dan bank tujuan</small></div>
+              <div><span>02</span><strong>Tinjau metode</strong><small>Rincian yang tersedia</small></div>
+              <div><span>03</span><strong>Pantau status</strong><small>Ikuti pembaruan terbaru</small></div>
+            </div>
+          </section>
+          <section class="dashboard-quick-section" aria-labelledby="dashboard-quick-title">
+            <div class="dashboard-section-heading">
+              <div><span class="eyebrow">AKSES CEPAT</span><h2 id="dashboard-quick-title">Layanan simulasi</h2></div>
+            </div>
+            <nav class="dashboard-quick-grid" aria-label="Akses layanan simulasi">
+              <button class="dashboard-quick-card" type="button" data-action="new-transfer">
+                <span class="dashboard-quick-icon" aria-hidden="true">⇄</span><span><strong>Transfer Antarbank</strong><small>Mulai alur transfer lokal</small></span><span class="quick-arrow" aria-hidden="true">→</span>
+              </button>
+              <button class="dashboard-quick-card" type="button" data-action="history">
+                <span class="dashboard-quick-icon history" aria-hidden="true">◷</span><span><strong>Riwayat Transaksi</strong><small>Lihat status simulasi terbaru</small></span><span class="quick-arrow" aria-hidden="true">→</span>
+              </button>
+              <button class="dashboard-quick-card" type="button" data-action="help">
+                <span class="dashboard-quick-icon help" aria-hidden="true">?</span><span><strong>Bantuan Transfer</strong><small>Arahan untuk status belum jelas</small></span><span class="quick-arrow" aria-hidden="true">→</span>
+              </button>
+            </nav>
+          </section>
+          <div class="dashboard-content-grid">
+            <section class="dashboard-activity card" aria-labelledby="activity-title">
+              <div class="dashboard-section-heading activity-heading">
+                <div><span class="eyebrow">AKTIVITAS LOKAL</span><h2 id="activity-title">Transaksi terbaru</h2></div>
+                <button class="text-button" type="button" data-action="history">Lihat semua <span aria-hidden="true">→</span></button>
+              </div>
+              ${recentTransactions.length ? `
+                <div class="dashboard-transaction-list">
+                  ${recentTransactions.map((transaction) => `
+                    <article class="dashboard-transaction">
+                      <span class="transaction-mark" aria-hidden="true">↗</span>
+                      <span class="transaction-description"><strong>${escapeHtml(transaction.recipientName)}</strong><small>${escapeHtml(transaction.bankName)} · ${escapeHtml(transaction.methodName)}</small>${transaction.reference ? `<small>Referensi: ${escapeHtml(transaction.reference)}</small>` : ""}</span>
+                      <span class="transaction-amount">${formatAmount(transaction.amount)}</span>
+                      <span class="history-status ${transaction.status === STATUS.SUCCESS ? "success" : transaction.status === STATUS.FAILED ? "failed" : "processing"}">${transaction.status === STATUS.SUCCESS ? "✓" : transaction.status === STATUS.FAILED ? "!" : "⏳"} ${escapeHtml(transaction.status)}</span>
+                    </article>
+                  `).join("")}
+                </div>
+              ` : `
+                <div class="dashboard-empty">
+                  <span class="empty-activity-icon" aria-hidden="true">◷</span>
+                  <div><strong>Belum ada transaksi simulasi</strong><p>Riwayat akan muncul setelah Anda menjalankan alur transfer.</p></div>
+                  <button class="button button-secondary" type="button" data-action="new-transfer">Mulai simulasi</button>
+                </div>
+              `}
+            </section>
+            <aside class="dashboard-side-panels" aria-label="Informasi simulasi dan bantuan">
+              <section class="dashboard-note-card">
+                <span class="note-icon" aria-hidden="true">i</span>
+                <h2>Informasi saldo</h2>
+                <p>Saldo rekening dan rekening sumber tidak tersedia dalam simulasi ini.</p>
+                <span class="note-foot">Data transaksi hanya tersimpan lokal di browser.</span>
+              </section>
+              <section class="dashboard-help-card">
+                <span class="help-icon-large" aria-hidden="true">?</span>
+                <h2>Status belum jelas?</h2>
+                <p>Periksa riwayat terlebih dahulu. Jangan ulangi transfer serupa jika status masih diproses.</p>
+                <button class="text-button" type="button" data-action="help">Buka panduan bantuan <span aria-hidden="true">→</span></button>
+              </section>
+            </aside>
+          </div>
+          <footer class="dashboard-footer"><span>J-Connect · Simulasi transfer antarbank</span><span>Data lokal · Tidak ada transaksi bank nyata</span></footer>
+        </div>
       </div>
     </div>
   `;
@@ -260,32 +342,112 @@ function renderTransfer() {
 }
 
 function renderMethods() {
+  const bank = selectedBank();
+  const recipientName = currentRecipient();
+  if (!bank || !recipientName) {
+    state.route = "transfer";
+    renderTransfer();
+    return;
+  }
+
   app.innerHTML = `
-    <div class="page">
-      ${header("Metode Transfer", "back-transfer")}
-      <div class="content">
+    <div class="page directory-screen">
+      <header class="site-header">
+        <button class="site-brand" type="button" data-action="home" aria-label="J-Connect, Beranda">
+          <span class="brand-mark" aria-hidden="true">J</span>
+          <span>J-Connect<small>Bank Jatim · Simulasi</small></span>
+        </button>
+        <nav class="site-nav" aria-label="Navigasi utama">
+          <button type="button" class="site-nav-link" data-action="home">Beranda</button>
+          <button type="button" class="site-nav-link active" data-action="back-transfer" aria-current="page">Transfer</button>
+          <button type="button" class="site-nav-link" data-action="history">Riwayat</button>
+          <button type="button" class="site-nav-link" data-action="help">Bantuan</button>
+        </nav>
+        <button class="button button-secondary site-login" type="button" data-action="back-transfer">Ubah tujuan</button>
+      </header>
+      <div class="directory-main">
+        <nav class="directory-breadcrumb" aria-label="Breadcrumb">
+          <button type="button" data-action="home">Beranda</button><span aria-hidden="true">/</span>
+          <button type="button" data-action="back-transfer">Transfer</button><span aria-hidden="true">/</span>
+          <span aria-current="page">Metode transfer</span>
+        </nav>
+        <div class="directory-heading">
+          <div>
+            <span class="eyebrow">LANGKAH 2 DARI 3</span>
+            <h1>Pilih metode transfer</h1>
+            <p>Bandingkan pilihan simulasi sebelum meninjau ringkasan konfirmasi.</p>
+          </div>
+          <div class="directory-recipient">
+            <span class="recipient-avatar" aria-hidden="true">${escapeHtml(recipientName.charAt(0).toUpperCase())}</span>
+            <span><small>Penerima simulasi</small><strong>${escapeHtml(recipientName)}</strong><small>${escapeHtml(bank.name)}</small></span>
+            <button type="button" class="text-button" data-action="correct">Ubah</button>
+          </div>
+        </div>
         ${networkPanel()}
         ${historyErrorPanel()}
-        <p class="simulation-note">Nama di bawah hanya label pembanding simulasi, bukan nama metode bank. Biaya, kecepatan, ketentuan, dan batas nominal masih TBD.</p>
-        <div class="method-list" role="radiogroup" aria-label="Metode transfer">
-          ${methods.map((method) => `
-            <label class="method-option ${state.methodId === method.id ? "selected" : ""}">
-              <input type="radio" name="method" value="${method.id}" ${state.methodId === method.id ? "checked" : ""} />
-              <span>
-                <strong>${method.name}</strong>
-                <span class="method-meta">Biaya: ${method.fee}</span>
-                <span class="method-meta">Kecepatan: ${method.speed}</span>
-                <span class="method-meta">Ketentuan: ${method.terms}</span>
-                <span class="method-meta">Batas nominal: ${method.limit}</span>
-              </span>
-            </label>
-          `).join("")}
-        </div>
-        <div id="method-error" class="field-error" role="alert"></div>
-        <div class="actions">
-          <button class="button button-primary" type="button" data-action="confirm-method">Gunakan Metode Pilihan</button>
+        <div class="directory-layout">
+          <section class="directory-results" aria-labelledby="method-list-title">
+            <div class="directory-toolbar">
+              <div><h2 id="method-list-title">Metode transfer</h2><p>Informasi biaya dan ketentuan belum ditetapkan.</p></div>
+              <span class="method-count">${methods.length} pilihan simulasi</span>
+            </div>
+            <p class="simulation-note method-simulation-note">Nama metode dan seluruh rincian berikut hanya untuk simulasi. Biaya, kecepatan, ketentuan, dan batas nominal masih TBD.</p>
+            <div class="method-list method-grid" role="radiogroup" aria-label="Pilih metode transfer simulasi">
+              ${methods.map((method) => `
+                <label class="method-option method-card ${state.methodId === method.id ? "selected" : ""}">
+                  <input type="radio" name="method" value="${method.id}" ${state.methodId === method.id ? "checked" : ""} />
+                  <span class="method-card-content">
+                    <span class="method-card-head">
+                      <span class="method-symbol" aria-hidden="true">${method.id === methods[0].id ? "↗" : "⇄"}</span>
+                      <span><strong>${escapeHtml(method.name)}</strong><span class="method-meta">Metode transfer simulasi</span></span>
+                      <span class="method-selected-mark" aria-hidden="true">✓</span>
+                    </span>
+                    <span class="method-card-description">Bandingkan informasi metode sebelum melanjutkan. Nilai resmi belum tersedia dalam simulasi ini.</span>
+                    <span class="method-facts">
+                      <span><small>Biaya</small><strong>${escapeHtml(method.fee)}</strong></span>
+                      <span><small>Kecepatan</small><strong>${escapeHtml(method.speed)}</strong></span>
+                      <span><small>Ketentuan</small><strong>${escapeHtml(method.terms)}</strong></span>
+                      <span><small>Batas nominal</small><strong>${escapeHtml(method.limit)}</strong></span>
+                    </span>
+                  </span>
+                </label>
+              `).join("")}
+            </div>
+            <div id="method-error" class="field-error" role="alert"></div>
+            <div class="directory-actions">
+              <button class="button button-secondary" type="button" data-action="back-transfer">Kembali ke tujuan</button>
+              <button class="button button-primary" type="button" data-action="confirm-method">Lanjut ke konfirmasi <span aria-hidden="true">→</span></button>
+            </div>
+          </section>
+          <aside class="directory-sidebar" aria-label="Informasi transfer">
+            <section class="info-card">
+              <span class="info-card-icon" aria-hidden="true">i</span>
+              <h2>Informasi metode</h2>
+              <p>Rincian biaya, kecepatan, ketentuan, dan batas nominal belum ditentukan untuk pilihan simulasi.</p>
+              <ul>
+                <li>Bandingkan informasi dengan format yang sama.</li>
+                <li>Tinjau seluruh rincian pada konfirmasi.</li>
+              </ul>
+            </section>
+            <section class="security-card">
+              <span class="security-icon" aria-hidden="true">✓</span>
+              <h2>Periksa tujuan Anda</h2>
+              <p>Pastikan nama penerima dan bank tujuan sudah benar sebelum menyetujui transfer simulasi.</p>
+              <button type="button" class="text-button" data-action="correct">Ubah tujuan <span aria-hidden="true">→</span></button>
+            </section>
+            <button class="assistance-link" type="button" data-action="help">
+              <span class="assistance-icon" aria-hidden="true">?</span>
+              <span><strong>Butuh bantuan?</strong><small>Baca panduan transaksi simulasi</small></span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </aside>
         </div>
       </div>
+      <footer class="site-footer">
+        <span class="footer-brand"><span class="brand-mark" aria-hidden="true">J</span><strong>J-Connect</strong></span>
+        <span>Simulasi lokal · Tidak terhubung ke rekening atau sistem perbankan nyata</span>
+        <nav aria-label="Tautan bantuan"><button type="button" data-action="history">Riwayat</button><button type="button" data-action="help">Bantuan</button></nav>
+      </footer>
     </div>
   `;
 }
@@ -293,22 +455,55 @@ function renderMethods() {
 function renderConfirmation() {
   const bank = selectedBank();
   const method = selectedMethod();
+  const recipientName = currentRecipient();
+  const maskedAccount = state.accountNumber
+    ? `•••• ${state.accountNumber.slice(-4)}`
+    : "Nomor rekening simulasi";
   const matchingDuplicate = checkDuplicate();
   const duplicateProcessing = state.history.some((item) =>
     item.id === state.duplicateTransactionId &&
     item.id === matchingDuplicate?.id &&
     item.status === STATUS.PROCESSING
   );
-  if (!bank || !method) {
+  if (!bank || !method || !recipientName) {
     state.route = "transfer";
     renderTransfer();
     return;
   }
 
   app.innerHTML = `
-    <div class="page">
-      ${header("Konfirmasi Transfer", "methods")}
-      <div class="content">
+    <div class="page confirm-page">
+      <header class="site-header">
+        <button class="site-brand" type="button" data-action="home" aria-label="J-Connect, Beranda">
+          <span class="brand-mark" aria-hidden="true">J</span>
+          <span>J-Connect<small>Bank Jatim · Simulasi</small></span>
+        </button>
+        <nav class="site-nav" aria-label="Navigasi utama">
+          <button type="button" class="site-nav-link" data-action="home">Beranda</button>
+          <button type="button" class="site-nav-link active" data-action="methods" aria-current="page">Transfer</button>
+          <button type="button" class="site-nav-link" data-action="history">Riwayat</button>
+          <button type="button" class="site-nav-link" data-action="help">Bantuan</button>
+        </nav>
+        <button class="button button-secondary site-login" type="button" data-action="correct">Ubah tujuan</button>
+      </header>
+      <div class="confirm-main">
+        <nav class="directory-breadcrumb" aria-label="Breadcrumb">
+          <button type="button" data-action="home">Beranda</button><span aria-hidden="true">/</span>
+          <button type="button" data-action="methods">Transfer</button><span aria-hidden="true">/</span>
+          <span aria-current="page">Konfirmasi</span>
+        </nav>
+        <div class="confirm-heading">
+          <div>
+            <span class="eyebrow">LANGKAH 3 DARI 3</span>
+            <h1>Periksa detail penerima</h1>
+            <p>Pastikan informasi tujuan transfer sudah benar sebelum menyetujui simulasi.</p>
+          </div>
+          <ol class="confirm-steps" aria-label="Langkah transfer">
+            <li class="complete"><span>✓</span>Tujuan</li>
+            <li class="complete"><span>✓</span>Detail transfer</li>
+            <li class="current" aria-current="step"><span>3</span>Konfirmasi</li>
+          </ol>
+        </div>
         ${networkPanel()}
         ${historyErrorPanel()}
         ${duplicateProcessing ? `
@@ -322,24 +517,78 @@ function renderConfirmation() {
             </div>
           </div>
         ` : ""}
-        <div class="card">
-          <h2>Ringkasan Transfer</h2>
-          <dl>
-            <div class="summary-row"><dt>Penerima</dt><dd>${escapeHtml(currentRecipient())}</dd></div>
-            <div class="summary-row"><dt>Bank tujuan</dt><dd>${escapeHtml(bank.name)}</dd></div>
-            <div class="summary-row"><dt>Nominal</dt><dd>${formatAmount(state.amount)}</dd></div>
-            <div class="summary-row"><dt>Biaya administrasi</dt><dd>TBD</dd></div>
-            <div class="summary-row"><dt>Metode</dt><dd>${escapeHtml(method.name)}</dd></div>
-            <div class="summary-row"><dt>Total dana didebit</dt><dd>TBD (biaya belum ditetapkan)</dd></div>
-          </dl>
-        </div>
-        <button class="button button-secondary button-full-width" type="button" data-action="correct">Ubah Tujuan</button>
-        ${duplicateProcessing ? "" : `
-          <div class="actions">
-            <button class="button button-primary" type="button" data-action="approve">Setujui Transfer Simulasi</button>
+        <div class="confirm-layout">
+          <div class="confirm-primary-column">
+            <section class="recipient-profile card" aria-labelledby="recipient-title">
+              <div class="profile-heading">
+                <span class="eyebrow">TUJUAN TRANSFER</span>
+                <button class="button button-secondary profile-edit" type="button" data-action="correct">Ubah Tujuan</button>
+              </div>
+              <div class="profile-identity">
+                <span class="bank-logo-placeholder" aria-hidden="true">▣</span>
+                <div class="profile-name">
+                  <h2 id="recipient-title">${escapeHtml(recipientName)}</h2>
+                  <p>${escapeHtml(bank.name)}</p>
+                  <span class="account-number">${escapeHtml(maskedAccount)}</span>
+                </div>
+              </div>
+              <div class="recipient-verification">
+                <span aria-hidden="true">✓</span>
+                <span><strong>Nama penerima terverifikasi</strong><small>Berdasarkan data simulasi lokal</small></span>
+              </div>
+            </section>
+            <section class="selected-method-card card" aria-labelledby="selected-method-title">
+              <div class="selected-method-header">
+                <span class="method-symbol" aria-hidden="true">⇄</span>
+                <span><small>METODE TERPILIH</small><strong id="selected-method-title">${escapeHtml(method.name)}</strong></span>
+                <span class="method-selected-mark selected" aria-hidden="true">✓</span>
+              </div>
+              <div class="selected-method-facts">
+                <span><small>Biaya administrasi</small><strong>${escapeHtml(method.fee)}</strong></span>
+                <span><small>Kecepatan</small><strong>${escapeHtml(method.speed)}</strong></span>
+                <span><small>Ketentuan</small><strong>${escapeHtml(method.terms)}</strong></span>
+              </div>
+              <button type="button" class="text-button selected-method-edit" data-action="methods">Ubah metode transfer <span aria-hidden="true">→</span></button>
+            </section>
+            <section class="confirm-security-note">
+              <span class="security-icon" aria-hidden="true">✓</span>
+              <div><strong>Periksa kembali nama dan rekening tujuan</strong><p>Pastikan informasi penerima sudah sesuai sebelum menyetujui transfer simulasi.</p></div>
+            </section>
+            <div class="confirm-actions">
+              <button class="button button-secondary" type="button" data-action="methods">Kembali</button>
+              ${duplicateProcessing ? "" : `<button class="button button-primary" type="button" data-action="approve">Setujui Transfer Simulasi <span aria-hidden="true">→</span></button>`}
+            </div>
           </div>
-        `}
+          <aside class="confirm-sidebar" aria-label="Ringkasan dan bantuan transfer">
+            <section class="confirm-summary card" aria-labelledby="confirm-summary-title">
+              <div class="summary-title-row">
+                <h2 id="confirm-summary-title">Ringkasan transfer</h2>
+                <span class="summary-sim-tag">SIMULASI</span>
+              </div>
+              <dl>
+                <div class="summary-row"><dt>Penerima</dt><dd>${escapeHtml(recipientName)}</dd></div>
+                <div class="summary-row"><dt>Bank tujuan</dt><dd>${escapeHtml(bank.name)}</dd></div>
+                <div class="summary-row summary-amount-row"><dt>Nominal transfer</dt><dd>${formatAmount(state.amount)}</dd></div>
+                <div class="summary-row"><dt>Biaya administrasi</dt><dd>${escapeHtml(method.fee)}</dd></div>
+                <div class="summary-row"><dt>Metode</dt><dd>${escapeHtml(method.name)}</dd></div>
+                <div class="summary-row summary-total"><dt>Total dana didebit</dt><dd>TBD</dd></div>
+              </dl>
+              <p class="summary-disclaimer">Total debit belum dapat dihitung karena biaya metode masih TBD.</p>
+            </section>
+            <section class="confirm-help-card">
+              <span class="help-status-icon" aria-hidden="true">i</span>
+              <div><strong>Status transaksi</strong><p>Status terbaru akan ditampilkan setelah simulasi disetujui. Jika belum jelas, periksa riwayat dan jangan mengulang transfer serupa.</p></div>
+              <button type="button" class="text-button" data-action="help">Buka bantuan <span aria-hidden="true">→</span></button>
+              <button type="button" class="text-button" data-action="history">Lihat riwayat <span aria-hidden="true">→</span></button>
+            </section>
+          </aside>
+        </div>
       </div>
+      <footer class="site-footer">
+        <span class="footer-brand"><span class="brand-mark" aria-hidden="true">J</span><strong>J-Connect</strong></span>
+        <span>Simulasi lokal · Tidak terhubung ke rekening atau sistem perbankan nyata</span>
+        <nav aria-label="Tautan bantuan"><button type="button" data-action="history">Riwayat</button><button type="button" data-action="help">Bantuan</button></nav>
+      </footer>
     </div>
   `;
 }
