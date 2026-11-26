@@ -39,6 +39,7 @@ const state = {
   historyError: "",
   currentTransactionId: null,
   duplicateTransactionId: null,
+  validationAttempted: false,
   networkWarning: !navigator.onLine,
 };
 
@@ -180,9 +181,9 @@ function renderRecipientVerification() {
 
   const hasInput = Boolean(state.accountNumber || state.bankId);
   return `
-    <div class="${hasInput ? "error-panel" : "simulation-note"}" role="status" aria-live="polite">
+    <div class="simulation-note" role="status" aria-live="polite">
       ${hasInput
-        ? "Data rekening dan bank tidak cocok dengan penerima simulasi. Periksa kembali tujuan."
+        ? "Penerima belum terverifikasi dari data simulasi."
         : "Masukkan rekening simulasi dan pilih bank untuk memverifikasi penerima."}
     </div>
   `;
@@ -307,6 +308,11 @@ function renderTransfer() {
       <div class="content">
         ${networkPanel()}
         ${historyErrorPanel()}
+        <ol class="confirm-steps transfer-progress" aria-label="Langkah transfer">
+          <li class="current" aria-current="step"><span>1</span>Tujuan</li>
+          <li><span>2</span>Metode</li>
+          <li><span>3</span>Konfirmasi</li>
+        </ol>
         <p class="simulation-note">Data simulasi tersedia: rekening 100001 untuk Bank Simulasi A dan 100002 untuk Bank Simulasi B. Nama penerima hanya ditampilkan dari pemetaan lokal.</p>
         <form id="transfer-form" class="transfer-form" novalidate>
           <div class="form-group">
@@ -705,7 +711,8 @@ function renderHelp() {
   `;
 }
 
-function validateTransferForm() {
+function validateTransferForm(shouldFocusInvalid = true) {
+  state.validationAttempted = true;
   let valid = true;
   const setError = (fieldId, errorId, message, markInvalid = true) => {
     const field = document.getElementById(fieldId);
@@ -746,8 +753,8 @@ function validateTransferForm() {
   setError(
     "accountNumber",
     "recipient-error",
-    accountNumber && bankId && !recipientName
-      ? "Data rekening tidak ditemukan untuk bank yang dipilih. Periksa kembali tujuan."
+    accountNumber && bankId && /^\d+$/.test(accountNumber) && !recipientName
+      ? "Rekening tidak cocok dengan bank yang dipilih. Periksa nomor rekening atau pilih bank yang sesuai."
       : "",
     false
   );
@@ -758,12 +765,11 @@ function validateTransferForm() {
     valid = false;
   }
 
-  if (!valid) {
+  if (!valid && shouldFocusInvalid) {
     document.querySelector('#transfer-form [aria-invalid="true"]')?.focus();
     return false;
   }
 
-  state.methodId = "";
   return valid;
 }
 
@@ -837,21 +843,14 @@ function startNewTransfer() {
   state.methodId = "";
   state.currentTransactionId = null;
   state.duplicateTransactionId = null;
+  state.validationAttempted = false;
   go("transfer");
 }
 
 function refreshRecipientVerification() {
   const verification = document.getElementById("recipient-verification");
   if (verification) verification.innerHTML = renderRecipientVerification();
-
-  const accountError = document.getElementById("account-error");
-  const recipientError = document.getElementById("recipient-error");
-  const bankError = document.getElementById("bank-error");
-  if (accountError) accountError.textContent = "";
-  if (recipientError) recipientError.textContent = "";
-  if (bankError && state.bankId) bankError.textContent = "";
-  document.getElementById("accountNumber")?.setAttribute("aria-invalid", "false");
-  document.getElementById("bankId")?.setAttribute("aria-invalid", "false");
+  if (state.validationAttempted) validateTransferForm(false);
 }
 
 function go(route) {
@@ -879,6 +878,7 @@ document.addEventListener("input", (event) => {
     const error = document.getElementById("amount-error");
     if (error) error.textContent = "";
     event.target.setAttribute("aria-invalid", "false");
+    if (state.validationAttempted) validateTransferForm(false);
   }
 });
 

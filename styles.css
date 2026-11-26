@@ -815,6 +815,7 @@ a:focus-visible {
 .confirm-heading h1 { margin: 8px 0; font-size: clamp(30px, 3.2vw, 40px); line-height: 1.2; letter-spacing: -.035em; }
 .confirm-heading p { margin: 0; color: var(--color-text-secondary); }
 .confirm-steps { width: min(100%, 440px); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.transfer-progress { margin-bottom: var(--space-4); }
 .confirm-steps li { min-width: 0; display: flex; align-items: center; gap: 8px; color: var(--color-text-secondary); font-size: var(--text-xs); white-space: nowrap; }
 .confirm-steps li > span { width: 28px; height: 28px; flex: 0 0 28px; display: grid; place-items: center; border: 1px solid var(--color-border); border-radius: 50%; background: var(--color-surface); font-size: var(--text-xs); }
 .confirm-steps li.complete { color: var(--color-success); }
