@@ -37,6 +37,8 @@ const state = {
   methodId: "",
   history: [],
   historyError: "",
+  historyQuery: "",
+  historyStatusFilter: "",
   currentTransactionId: null,
   duplicateTransactionId: null,
   validationAttempted: false,
@@ -88,6 +90,9 @@ function loadHistory() {
 
   return parsed.map((item) => ({
     ...item,
+    createdAt: typeof item.createdAt === "string" && !Number.isNaN(Date.parse(item.createdAt))
+      ? item.createdAt
+      : null,
     reference: typeof item.reference === "string" && !item.reference.startsWith("SIM-")
       ? item.reference
       : null,
@@ -113,6 +118,19 @@ function formatAmount(value) {
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(BigInt(digits));
+}
+
+function formatTransactionDate(value) {
+  if (!value || Number.isNaN(Date.parse(value))) return "Waktu belum tersedia dalam simulasi ini.";
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function maskAccountNumber(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits ? `•••• ${digits.slice(-4)}` : "Informasi rekening tujuan tidak tersedia.";
 }
 
 function escapeHtml(value) {
@@ -614,14 +632,21 @@ function renderStatus() {
   const statusTitle = transaction.status === STATUS.SUCCESS ? "Transfer Berhasil" :
     transaction.status === STATUS.FAILED ? "Transfer Gagal" : "Sedang Diproses";
   const statusDescription = transaction.status === STATUS.SUCCESS ?
-    "Status terbaru menyatakan transfer berhasil." :
+    "Dalam simulasi ini, status terbaru menyatakan transfer berhasil." :
     transaction.status === STATUS.FAILED ?
-      "Status terbaru menyatakan transfer gagal. Periksa riwayat atau hubungi bantuan." :
-      "Status belum final. Periksa riwayat atau tunggu pembaruan status.";
+      "Dalam simulasi ini, transaksi dinyatakan gagal. Ini tidak menyatakan bahwa dana sungguhan dipindahkan atau dikembalikan." :
+      "Transaksi simulasi ini masih diproses dan statusnya belum final. Jangan mengirim ulang transfer yang sama.";
+  const nextAction = transaction.status === STATUS.SUCCESS ?
+    "Anda dapat melihat riwayat transaksi atau kembali ke beranda simulasi." :
+    transaction.status === STATUS.FAILED ?
+      "Tinjau rincian di bawah atau kembali ke formulir simulasi untuk memeriksa tujuan." :
+      "Periksa riwayat untuk melihat pembaruan status. Jangan mengulang transfer selama status belum jelas.";
+  const fee = transaction.fee || "Biaya belum tersedia dalam simulasi ini.";
+  const totalDebit = transaction.totalDebit || "Total debit belum tersedia dalam simulasi ini.";
 
   app.innerHTML = `
     <div class="page">
-      ${header("Status Transaksi", "home")}
+      ${header("Detail Transaksi", "home")}
       <div class="content">
         ${networkPanel()}
         ${historyErrorPanel()}
@@ -631,7 +656,7 @@ function renderStatus() {
           <h2>${statusTitle}</h2>
           <p>${statusDescription}</p>
           ${transaction.reference ? `<p><strong>Nomor referensi simulasi:</strong> ${escapeHtml(transaction.reference)}</p>` : ""}
-          ${!transaction.reference ? `<p class="method-meta">Nomor referensi belum tersedia dalam simulasi ini.</p>` : ""}
+          <p class="status-next-action"><strong>Langkah berikutnya:</strong> ${nextAction}</p>
         </div>
 
         ${transaction.status === STATUS.PROCESSING ? `
@@ -649,15 +674,98 @@ function renderStatus() {
           </div>
         ` : ""}
 
+        <section class="card transaction-detail-card" aria-labelledby="transaction-detail-heading">
+          <h3 id="transaction-detail-heading">Rincian Transaksi Simulasi</h3>
+          <dl class="transaction-details">
+            <div class="summary-row"><dt>Status</dt><dd>${escapeHtml(transaction.status)}</dd></div>
+            <div class="summary-row"><dt>Nama penerima</dt><dd>${escapeHtml(transaction.recipientName || "Informasi penerima tidak tersedia.")}</dd></div>
+            <div class="summary-row"><dt>Bank tujuan</dt><dd>${escapeHtml(transaction.bankName || "Informasi bank tujuan tidak tersedia.")}</dd></div>
+            <div class="summary-row"><dt>Rekening tujuan</dt><dd>${escapeHtml(maskAccountNumber(transaction.accountNumber))}</dd></div>
+            <div class="summary-row"><dt>Nominal transfer</dt><dd>${transaction.amount ? formatAmount(transaction.amount) : "Informasi nominal tidak tersedia."}</dd></div>
+            <div class="summary-row"><dt>Biaya administrasi</dt><dd>${escapeHtml(fee)}</dd></div>
+            <div class="summary-row"><dt>Total dana didebit</dt><dd>${escapeHtml(totalDebit)}</dd></div>
+            <div class="summary-row"><dt>Metode transfer</dt><dd>${escapeHtml(transaction.methodName || "Informasi metode tidak tersedia.")}</dd></div>
+            <div class="summary-row"><dt>Waktu simulasi</dt><dd>${escapeHtml(formatTransactionDate(transaction.createdAt))}</dd></div>
+            <div class="summary-row"><dt>Referensi</dt><dd>${transaction.reference ? escapeHtml(transaction.reference) : "Nomor referensi belum tersedia dalam simulasi ini."}</dd></div>
+          </dl>
+        </section>
+
         <div class="actions">
-          <button class="button button-primary" type="button" data-action="history">Buka Riwayat</button>
-          <button class="button button-secondary" type="button" data-action="help">Customer Service</button>
+          ${transaction.status === STATUS.SUCCESS ? `
+            <button class="button button-primary" type="button" data-action="history">Lihat Riwayat Transaksi</button>
+            <button class="button button-secondary" type="button" data-action="home">Kembali ke Beranda</button>
+          ` : transaction.status === STATUS.PROCESSING ? `
+            <button class="button button-primary" type="button" data-action="history">Periksa Riwayat</button>
+            <button class="button button-secondary" type="button" data-action="help">Buka Bantuan</button>
+          ` : `
+            <button class="button button-primary" type="button" data-action="new-transfer">Kembali ke Formulir Simulasi</button>
+            <button class="button button-secondary" type="button" data-action="history">Lihat Riwayat</button>
+          `}
           ${state.duplicateTransactionId && transaction.id === state.duplicateTransactionId && transaction.status === STATUS.PROCESSING ? `<button class="button button-secondary" type="button" data-action="confirm">Kembali ke Konfirmasi</button>` : ""}
-          ${transaction.status !== STATUS.PROCESSING ? `<button class="button button-secondary" type="button" data-action="new-transfer">Transfer Baru</button>` : ""}
         </div>
       </div>
     </div>
   `;
+}
+
+function getFilteredHistory() {
+  const query = state.historyQuery.trim().toLocaleLowerCase("id-ID");
+  return state.history.filter((transaction) => {
+    const matchesStatus = !state.historyStatusFilter || transaction.status === state.historyStatusFilter;
+    if (!matchesStatus) return false;
+    if (!query) return true;
+    const searchable = [
+      transaction.recipientName,
+      transaction.bankName,
+      transaction.accountNumber,
+      transaction.amount,
+      transaction.methodName,
+      transaction.status,
+      transaction.reference,
+      transaction.createdAt,
+      formatTransactionDate(transaction.createdAt),
+    ].filter(Boolean).join(" ").toLocaleLowerCase("id-ID");
+    return searchable.includes(query);
+  });
+}
+
+function renderHistoryItems() {
+  const filteredTransactions = getFilteredHistory();
+  const list = document.getElementById("history-list");
+  const count = document.getElementById("history-count");
+  const activeFilters = document.getElementById("history-active-filters");
+  if (!list || !count || !activeFilters) return;
+
+  const hasActiveFilters = Boolean(state.historyQuery.trim() || state.historyStatusFilter);
+  const filterParts = [];
+  if (state.historyQuery.trim()) filterParts.push(`Pencarian: “${state.historyQuery.trim()}”`);
+  if (state.historyStatusFilter) filterParts.push(`Status: ${state.historyStatusFilter}`);
+  activeFilters.textContent = filterParts.length ? `Filter aktif — ${filterParts.join(" · ")}` : "Menampilkan semua transaksi.";
+  count.textContent = `${filteredTransactions.length} dari ${state.history.length} transaksi`;
+  const resetButton = document.getElementById("reset-history-filters");
+  if (resetButton) resetButton.disabled = !hasActiveFilters;
+
+  if (!filteredTransactions.length) {
+    list.innerHTML = state.history.length
+      ? `<div class="empty-state history-empty"><strong>Tidak ada transaksi yang cocok</strong><span>Ubah kata pencarian atau filter status, atau tampilkan semua transaksi.</span><button class="button button-secondary" type="button" data-action="reset-history-filters">Reset filter</button></div>`
+      : `<div class="empty-state history-empty"><strong>Belum ada transaksi</strong><span>Riwayat simulasi akan muncul setelah transfer dimulai.</span><button class="button button-primary" type="button" data-action="new-transfer">Mulai Transfer Simulasi</button></div>`;
+    return;
+  }
+
+  list.innerHTML = filteredTransactions.map((transaction) => `
+    <article class="history-item">
+      <div class="history-top">
+        <div><strong>${escapeHtml(transaction.recipientName)}</strong><br><span class="method-meta">${escapeHtml(transaction.bankName)}</span></div>
+        <span class="history-status ${transaction.status === STATUS.SUCCESS ? "success" : transaction.status === STATUS.FAILED ? "failed" : "processing"}">
+          ${transaction.status === STATUS.SUCCESS ? "✓" : transaction.status === STATUS.FAILED ? "!" : "⏳"} ${escapeHtml(transaction.status)}
+        </span>
+      </div>
+      <p class="history-date">${escapeHtml(formatTransactionDate(transaction.createdAt))}</p>
+      <p>${formatAmount(transaction.amount)} · ${escapeHtml(transaction.methodName)}</p>
+      ${transaction.reference ? `<p><strong>Nomor referensi simulasi:</strong> ${escapeHtml(transaction.reference)}</p>` : ""}
+      <button class="text-button" type="button" data-history-id="${escapeHtml(transaction.id)}">Lihat Detail</button>
+    </article>
+  `).join("");
 }
 
 function renderHistory() {
@@ -667,28 +775,33 @@ function renderHistory() {
       <div class="content">
         ${networkPanel()}
         ${historyErrorPanel()}
-        ${state.history.length === 0 ? `
-          <div class="empty-state">
-            <strong>${state.historyError ? "Riwayat tidak dapat ditampilkan" : "Belum ada transaksi"}</strong>
-            <span>${state.historyError ? "Periksa pesan kendala penyimpanan di atas." : "Riwayat akan muncul setelah transfer simulasi dimulai."}</span>
-            <div class="actions"><button class="button button-primary" type="button" data-action="new-transfer">Mulai Transfer</button></div>
+        <section class="history-heading" aria-labelledby="history-title">
+          <h2 id="history-title">Riwayat Transaksi</h2>
+          <p>Periksa status dan rincian transaksi simulasi lokal. Status yang masih diproses belum final.</p>
+        </section>
+        <section class="history-filters" aria-label="Cari dan filter riwayat">
+          <div class="form-group">
+            <label for="history-search">Cari transaksi</label>
+            <input class="input" type="search" id="history-search" name="history-search" value="${escapeHtml(state.historyQuery)}" placeholder="Penerima, bank, nominal, metode..." aria-controls="history-list" />
           </div>
-        ` : state.history.map((transaction) => `
-          <article class="history-item">
-            <div class="history-top">
-              <div><strong>${escapeHtml(transaction.recipientName)}</strong><br><span class="method-meta">${escapeHtml(transaction.bankName)}</span></div>
-              <span class="history-status ${transaction.status === STATUS.SUCCESS ? "success" : transaction.status === STATUS.FAILED ? "failed" : "processing"}">
-                ${transaction.status === STATUS.SUCCESS ? "✓" : transaction.status === STATUS.FAILED ? "!" : "⏳"} ${escapeHtml(transaction.status)}
-              </span>
+          <div class="history-filter-row">
+            <div class="form-group">
+              <label for="history-status-filter">Filter status</label>
+              <select class="input" id="history-status-filter">
+                <option value="">Semua status</option>
+                ${Object.values(STATUS).map((status) => `<option value="${status}" ${state.historyStatusFilter === status ? "selected" : ""}>${status}</option>`).join("")}
+              </select>
             </div>
-            <p>${formatAmount(transaction.amount)} · ${escapeHtml(transaction.methodName)}</p>
-            ${transaction.reference ? `<p><strong>Nomor referensi simulasi:</strong> ${escapeHtml(transaction.reference)}</p>` : `<p>Nomor referensi belum tersedia dalam simulasi ini.</p>`}
-            <button class="text-button" type="button" data-history-id="${transaction.id}">Lihat Detail</button>
-          </article>
-        `).join("")}
+            <button class="button button-secondary history-reset" id="reset-history-filters" type="button" data-action="reset-history-filters">Reset filter</button>
+          </div>
+          <p class="history-active-filters" id="history-active-filters" aria-live="polite"></p>
+          <p class="history-count" id="history-count" aria-live="polite"></p>
+        </section>
+        <div id="history-list" class="history-list" aria-live="polite"></div>
       </div>
     </div>
   `;
+  renderHistoryItems();
 }
 
 function renderHelp() {
@@ -814,6 +927,9 @@ function createTransfer() {
     amount: state.amount,
     methodId: method.id,
     methodName: method.name,
+    fee: method.fee === "TBD" ? null : method.fee,
+    totalDebit: null,
+    createdAt: new Date().toISOString(),
     status: STATUS.PROCESSING,
     reference: null,
   };
@@ -865,6 +981,10 @@ function go(route) {
 }
 
 document.addEventListener("input", (event) => {
+  if (event.target.id === "history-search") {
+    state.historyQuery = event.target.value;
+    renderHistoryItems();
+  }
   if (event.target.id === "accountNumber") {
     state.accountNumber = event.target.value;
     state.methodId = "";
@@ -883,6 +1003,10 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  if (event.target.id === "history-status-filter") {
+    state.historyStatusFilter = event.target.value;
+    renderHistoryItems();
+  }
   if (event.target.id === "bankId") {
     state.bankId = event.target.value;
     state.methodId = "";
@@ -944,6 +1068,10 @@ document.addEventListener("click", (event) => {
       updateStatus(STATUS.FAILED);
     } else if (action === "history") {
       go("history");
+    } else if (action === "reset-history-filters") {
+      state.historyQuery = "";
+      state.historyStatusFilter = "";
+      renderHistory();
     } else if (action === "help") {
       go("help");
     } else if (action === "home") {
