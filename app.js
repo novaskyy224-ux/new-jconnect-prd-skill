@@ -41,6 +41,7 @@ const state = {
   historyStatusFilter: "",
   currentTransactionId: null,
   duplicateTransactionId: null,
+  cancelConfirmation: false,
   validationAttempted: false,
   networkWarning: !navigator.onLine,
 };
@@ -150,10 +151,10 @@ function selectedMethod() {
   return methods.find((method) => method.id === state.methodId);
 }
 
-function header(title, backAction) {
+function header(title, backAction, backLabel = "Kembali ke beranda") {
   return `
     <header class="header">
-      ${backAction ? `<button class="icon-button" type="button" data-action="${backAction}" aria-label="Kembali">←</button>` : '<span class="header-spacer" aria-hidden="true"></span>'}
+      ${backAction ? `<button class="icon-button" type="button" data-action="${backAction}" aria-label="${escapeHtml(backLabel)}">←</button>` : '<span class="header-spacer" aria-hidden="true"></span>'}
       <h1>${escapeHtml(title)}</h1>
     </header>
   `;
@@ -220,7 +221,7 @@ function renderHome() {
           <span class="dashboard-nav-label">MENU SIMULASI</span>
           <nav class="dashboard-nav">
             <button class="dashboard-nav-link active" type="button" data-action="home" aria-current="page"><span aria-hidden="true">⌂</span>Beranda</button>
-            <button class="dashboard-nav-link" type="button" data-action="new-transfer"><span aria-hidden="true">⇄</span>Transfer Antarbank</button>
+            <button class="dashboard-nav-link" type="button" data-action="transfer"><span aria-hidden="true">⇄</span>Transfer Antarbank</button>
             <button class="dashboard-nav-link" type="button" data-action="history"><span aria-hidden="true">◷</span>Riwayat Transaksi</button>
             <button class="dashboard-nav-link" type="button" data-action="help"><span aria-hidden="true">?</span>Bantuan Transfer</button>
           </nav>
@@ -248,7 +249,7 @@ function renderHome() {
               <span class="dashboard-hero-kicker">TRANSFER ANTARBANK</span>
               <h2>Periksa tujuan sebelum transfer.</h2>
               <p>Tinjau penerima, metode, dan status dalam satu alur simulasi yang jelas.</p>
-              <button class="button dashboard-hero-button" type="button" data-action="new-transfer">Mulai transfer simulasi <span aria-hidden="true">→</span></button>
+              <button class="button dashboard-hero-button" type="button" data-action="transfer">Mulai transfer simulasi <span aria-hidden="true">→</span></button>
             </div>
             <div class="dashboard-hero-steps" aria-label="Tahapan transfer simulasi">
               <div><span>01</span><strong>Periksa penerima</strong><small>Nama dan bank tujuan</small></div>
@@ -261,7 +262,7 @@ function renderHome() {
               <div><span class="eyebrow">AKSES CEPAT</span><h2 id="dashboard-quick-title">Layanan simulasi</h2></div>
             </div>
             <nav class="dashboard-quick-grid" aria-label="Akses layanan simulasi">
-              <button class="dashboard-quick-card" type="button" data-action="new-transfer">
+              <button class="dashboard-quick-card" type="button" data-action="transfer">
                 <span class="dashboard-quick-icon" aria-hidden="true">⇄</span><span><strong>Transfer Antarbank</strong><small>Mulai alur transfer lokal</small></span><span class="quick-arrow" aria-hidden="true">→</span>
               </button>
               <button class="dashboard-quick-card" type="button" data-action="history">
@@ -332,17 +333,27 @@ function renderTransfer() {
           <li><span>3</span>Konfirmasi</li>
         </ol>
         <p class="simulation-note">Data simulasi tersedia: rekening 100001 untuk Bank Simulasi A dan 100002 untuk Bank Simulasi B. Nama penerima hanya ditampilkan dari pemetaan lokal.</p>
+        ${state.cancelConfirmation ? `
+          <div class="warning-panel cancel-confirmation" role="alert">
+            <strong>Batalkan pengisian transfer?</strong>
+            <p>Data tujuan dan nominal yang belum disetujui akan dihapus.</p>
+            <div class="actions">
+              <button class="button button-secondary" type="button" data-action="keep-transfer">Lanjutkan mengisi</button>
+              <button class="button button-danger" type="button" data-action="confirm-cancel-transfer">Ya, batalkan isian</button>
+            </div>
+          </div>
+        ` : ""}
         <form id="transfer-form" class="transfer-form" novalidate>
           <div class="form-group">
-            <label for="accountNumber">Nomor rekening tujuan simulasi</label>
-            <input class="input" id="accountNumber" name="accountNumber" inputmode="numeric" autocomplete="off"
+            <label for="accountNumber">Nomor rekening tujuan simulasi <span class="required-indicator">(wajib)</span></label>
+            <input class="input" id="accountNumber" name="accountNumber" inputmode="numeric" autocomplete="off" required aria-required="true"
               value="${escapeHtml(state.accountNumber)}" aria-describedby="account-error recipient-error"
               placeholder="Contoh: 100001" />
             <div id="account-error" class="field-error" role="alert"></div>
           </div>
           <div class="form-group">
-            <label for="bankId">Bank tujuan</label>
-            <select class="input" id="bankId" name="bankId" aria-describedby="bank-error">
+            <label for="bankId">Bank tujuan <span class="required-indicator">(wajib)</span></label>
+            <select class="input" id="bankId" name="bankId" required aria-required="true" aria-describedby="bank-error">
               <option value="">Pilih bank simulasi</option>
               ${banks.map((bank) => `<option value="${bank.id}" ${state.bankId === bank.id ? "selected" : ""}>${bank.name}</option>`).join("")}
             </select>
@@ -351,13 +362,14 @@ function renderTransfer() {
           <div id="recipient-verification">${renderRecipientVerification()}</div>
           <div id="recipient-error" class="field-error" role="alert"></div>
           <div class="form-group form-group-wide">
-            <label for="amount">Nominal</label>
-            <input class="input" id="amount" name="amount" inputmode="numeric" autocomplete="off"
+            <label for="amount">Nominal <span class="required-indicator">(wajib)</span></label>
+            <input class="input" id="amount" name="amount" inputmode="numeric" autocomplete="off" required aria-required="true"
               value="${escapeHtml(state.amount)}" aria-describedby="amount-error" placeholder="Rp" />
             <div id="amount-error" class="field-error" role="alert"></div>
           </div>
           <div class="actions">
             <button class="button button-primary" type="submit">Lihat dan Pilih Metode</button>
+            <button class="button button-secondary" type="button" data-action="cancel-transfer">Batalkan isian</button>
           </div>
         </form>
       </div>
@@ -416,10 +428,10 @@ function renderMethods() {
               <span class="method-count">${methods.length} pilihan simulasi</span>
             </div>
             <p class="simulation-note method-simulation-note">Nama metode dan seluruh rincian berikut hanya untuk simulasi. Biaya, kecepatan, ketentuan, dan batas nominal masih TBD.</p>
-            <div class="method-list method-grid" role="radiogroup" aria-label="Pilih metode transfer simulasi">
+            <div class="method-list method-grid" id="method-options" role="radiogroup" aria-label="Pilih metode transfer simulasi" aria-required="true" aria-describedby="method-error">
               ${methods.map((method) => `
                 <label class="method-option method-card ${state.methodId === method.id ? "selected" : ""}">
-                  <input type="radio" name="method" value="${method.id}" ${state.methodId === method.id ? "checked" : ""} />
+                  <input type="radio" name="method" value="${method.id}" required ${state.methodId === method.id ? "checked" : ""} />
                   <span class="method-card-content">
                     <span class="method-card-head">
                       <span class="method-symbol" aria-hidden="true">${method.id === methods[0].id ? "↗" : "⇄"}</span>
@@ -959,6 +971,7 @@ function startNewTransfer() {
   state.methodId = "";
   state.currentTransactionId = null;
   state.duplicateTransactionId = null;
+  state.cancelConfirmation = false;
   state.validationAttempted = false;
   go("transfer");
 }
@@ -978,6 +991,22 @@ function go(route) {
   if (route === "help") renderHelp();
   if (route === "status") renderStatus();
   if (route === "confirm") renderConfirmation();
+
+  const headingSelector = {
+    home: ".dashboard-topbar h1",
+    transfer: ".header h1",
+    methods: ".directory-heading h1",
+    confirm: ".confirm-heading h1",
+    status: ".header h1",
+    history: ".header h1",
+    help: ".header h1",
+  }[route];
+  const heading = headingSelector && app.querySelector(headingSelector);
+  if (heading) {
+    heading.tabIndex = -1;
+    heading.classList.add("route-focus");
+    heading.focus();
+  }
 }
 
 document.addEventListener("input", (event) => {
@@ -1016,6 +1045,8 @@ document.addEventListener("change", (event) => {
   if (event.target.name === "method") {
     state.methodId = event.target.value;
     state.duplicateTransactionId = null;
+    const options = document.getElementById("method-options");
+    if (options) options.setAttribute("aria-invalid", "false");
     const error = document.getElementById("method-error");
     if (error) error.textContent = "";
     document.querySelectorAll(".method-option").forEach((option) => option.classList.remove("selected"));
@@ -1042,6 +1073,8 @@ document.addEventListener("click", (event) => {
       go("methods");
     } else if (action === "confirm-method") {
       if (!state.methodId) {
+        const options = document.getElementById("method-options");
+        if (options) options.setAttribute("aria-invalid", "true");
         const error = document.getElementById("method-error");
         if (error) error.textContent = "Pilih salah satu metode simulasi untuk melanjutkan.";
         document.querySelector('input[name="method"]')?.focus();
@@ -1051,6 +1084,24 @@ document.addEventListener("click", (event) => {
     } else if (action === "correct") {
       state.duplicateTransactionId = null;
       go("transfer");
+    } else if (action === "cancel-transfer") {
+      state.cancelConfirmation = true;
+      renderTransfer();
+      document.querySelector('[data-action="keep-transfer"]')?.focus();
+    } else if (action === "keep-transfer") {
+      state.cancelConfirmation = false;
+      renderTransfer();
+      document.querySelector('[data-action="cancel-transfer"]')?.focus();
+    } else if (action === "confirm-cancel-transfer") {
+      state.accountNumber = "";
+      state.bankId = "";
+      state.amount = "";
+      state.methodId = "";
+      state.currentTransactionId = null;
+      state.duplicateTransactionId = null;
+      state.validationAttempted = false;
+      state.cancelConfirmation = false;
+      go("home");
     } else if (action === "approve") {
       approveTransfer();
     } else if (action === "review-duplicate") {
@@ -1078,6 +1129,12 @@ document.addEventListener("click", (event) => {
       go("home");
     } else if (action === "new-transfer") {
       startNewTransfer();
+    } else if (action === "transfer") {
+      if (!state.currentTransactionId && (state.accountNumber || state.bankId || state.amount || state.methodId)) {
+        go("transfer");
+      } else {
+        startNewTransfer();
+      }
     } else if (action === "confirm") {
       go("confirm");
     }
